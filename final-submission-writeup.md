@@ -72,6 +72,6 @@ Formatting rules:
 
 The n8n workflow export is provided separately as:
 
-`Bolt-Weather Risk Alerts - Open-Meteo to Slack.submission.json`
+`workflows/Bolt-Weather Risk Alerts - Open-Meteo to Slack.json`
 
 The Slack webhook URL has been replaced with `YOUR_SLACK_WEBHOOK_URL` so no secrets are included in the submission file.

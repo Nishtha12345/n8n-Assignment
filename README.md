@@ -4,7 +4,7 @@ This is a compact home-task implementation for an AI & Automations Analyst role.
 
 ## What This Repo Contains
 
-- `workflows/bolt-weather-risk-alerts-n8n-workflow.json` - sanitized n8n workflow export for review/import.
+- `workflows/Bolt-Weather Risk Alerts - Open-Meteo to Slack.json` - sanitized n8n workflow export for review/import.
 - `n8n-code-nodes.js` - JavaScript snippets used in the two n8n Code nodes.
 - `llm-prompt.md` - final prompt used by the Gemini LLM node.
 - `final-submission-writeup.md` - concise write-up covering Parts A, B and C.
@@ -36,7 +36,7 @@ It checks the next 48 hours of hourly forecast data and alerts only when one or 
 
 ## Quick Review / Import Steps
 
-1. Import `workflows/bolt-weather-risk-alerts-n8n-workflow.json` into n8n.
+1. Import `workflows/Bolt-Weather Risk Alerts - Open-Meteo to Slack.json` into n8n.
 2. Add a Google Gemini credential to the `AI LLM Gemini` node.
 3. Create a Slack Incoming Webhook and paste it into the `Post to Slack` node where the export says `YOUR_SLACK_WEBHOOK_URL`.
 4. Run the workflow manually.
@@ -237,4 +237,4 @@ This keeps the workflow simple while avoiding repeated Slack messages every 3 ho
 - `task-summary.md` - summary and sample Slack alert.
 - `final-submission-writeup.md` - final Markdown write-up.
 - `Bolt-Weather-Automation-Final-Writeup.docx` - final Word write-up.
-- `workflows/bolt-weather-risk-alerts-n8n-workflow.json` - sanitized n8n workflow export.
+- `workflows/Bolt-Weather Risk Alerts - Open-Meteo to Slack.json` - sanitized n8n workflow export.
