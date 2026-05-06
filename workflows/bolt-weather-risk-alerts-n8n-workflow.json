@@ -1,0 +1,213 @@
+﻿{
+    "name":  "Bolt-Weather Risk Alerts - Open-Meteo to Slack",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "rule":  {
+                                                      "interval":  [
+                                                                       {
+                                                                           "field":  "hours",
+                                                                           "hoursInterval":  3
+                                                                       },
+                                                                       {
+
+                                                                       }
+                                                                   ]
+                                                  }
+                                     },
+                      "type":  "n8n-nodes-base.scheduleTrigger",
+                      "typeVersion":  1.3,
+                      "position":  [
+                                       -464,
+                                       -128
+                                   ],
+                      "id":  "0f0ec4bf-c199-4400-b684-a9b56ba97418",
+                      "name":  "Schedule Trigger"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const cities = [\n  {\n    city: \u0027Tallinn\u0027,\n    country: \u0027Estonia\u0027,\n    latitude: 59.4370,\n    longitude: 24.7536,\n    thresholds: {\n      rain24hMm: { headsUp: 10, urgent: 20, critical: 35 },\n      snow24hCm: { headsUp: 2, urgent: 6, critical: 12 },\n      windGustKmh: { headsUp: 45, urgent: 65, critical: 85 },\n      heatC: { headsUp: 26, urgent: 30, critical: 34 },\n      coldC: { headsUp: -8, urgent: -15, critical: -22 },\n    },\n  },\n  {\n    city: \u0027Madrid\u0027,\n    country: \u0027Spain\u0027,\n    latitude: 40.4168,\n    longitude: -3.7038,\n    thresholds: {\n      rain24hMm: { headsUp: 8, urgent: 20, critical: 35 },\n      snow24hCm: { headsUp: 0.5, urgent: 2, critical: 5 },\n      windGustKmh: { headsUp: 45, urgent: 65, critical: 85 },\n      heatC: { headsUp: 34, urgent: 38, critical: 42 },\n      coldC: { headsUp: 0, urgent: -4, critical: -8 },\n    },\n  },\n  {\n    city: \u0027Warsaw\u0027,\n    country: \u0027Poland\u0027,\n    latitude: 52.2297,\n    longitude: 21.0122,\n    thresholds: {\n      rain24hMm: { headsUp: 10, urgent: 25, critical: 40 },\n      snow24hCm: { headsUp: 2, urgent: 6, critical: 12 },\n      windGustKmh: { headsUp: 45, urgent: 65, critical: 85 },\n      heatC: { headsUp: 30, urgent: 34, critical: 38 },\n      coldC: { headsUp: -6, urgent: -12, critical: -18 },\n    },\n  },\n  {\n    city: \u0027Lagos\u0027,\n    country: \u0027Nigeria\u0027,\n    latitude: 6.5244,\n    longitude: 3.3792,\n    thresholds: {\n      rain24hMm: { headsUp: 20, urgent: 45, critical: 75 },\n      snow24hCm: { headsUp: 0.1, urgent: 1, critical: 2 },\n      windGustKmh: { headsUp: 40, urgent: 60, critical: 80 },\n      heatC: { headsUp: 33, urgent: 36, critical: 40 },\n      coldC: { headsUp: 20, urgent: 18, critical: 16 },\n    },\n  },\n];\n\nreturn cities.map((cityConfig) =\u003e {\n  const query = {\n    latitude: String(cityConfig.latitude),\n    longitude: String(cityConfig.longitude),\n    hourly: [\n      \u0027temperature_2m\u0027,\n      \u0027precipitation\u0027,\n      \u0027rain\u0027,\n      \u0027snowfall\u0027,\n      \u0027wind_speed_10m\u0027,\n      \u0027wind_gusts_10m\u0027,\n    ].join(\u0027,\u0027),\n    forecast_days: \u00273\u0027,\n    timezone: \u0027auto\u0027,\n    wind_speed_unit: \u0027kmh\u0027,\n    precipitation_unit: \u0027mm\u0027,\n  };\n\n  const params = Object.entries(query)\n    .map(([key, value]) =\u003e `${key}=${encodeURIComponent(value)}`)\n    .join(\u0027\u0026\u0027);\n\n  return {\n    json: {\n      ...cityConfig,\n      url: `https://api.open-meteo.com/v1/forecast?${params}`,\n    },\n  };\n});"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -288,
+                                       16
+                                   ],
+                      "id":  "489a1212-1564-48b1-bfe2-06d0a0dd1e07",
+                      "name":  "Build Open-Meteo Requests"
+                  },
+                  {
+                      "parameters":  {
+                                         "url":  "={{$json.url}}",
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+
+                                                                                       }
+                                                                      }
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       -128,
+                                       -144
+                                   ],
+                      "id":  "64fcaf7c-6a0f-4915-8882-d297ec193a62",
+                      "name":  "Get Open-Meteo Forecast"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const DEDUPE_HOURS = 24;\nconst HORIZON_HOURS = 48;\nconst ROLLING_WINDOW_HOURS = 24;\n\nconst staticData = $getWorkflowStaticData(\u0027global\u0027);\nstaticData.weatherAlertHistory ??= {};\n\nconst now = new Date();\nconst nowMs = now.getTime();\nconst horizonEndMs = nowMs + HORIZON_HOURS * 60 * 60 * 1000;\nconst dedupeMs = DEDUPE_HOURS * 60 * 60 * 1000;\n\nfor (const [key, value] of Object.entries(staticData.weatherAlertHistory)) {\n  if (!value?.sentAt || nowMs - value.sentAt \u003e 72 * 60 * 60 * 1000) {\n    delete staticData.weatherAlertHistory[key];\n  }\n}\n\nfunction severityFromHigh(value, thresholds) {\n  if (value \u003e= thresholds.critical) return \u0027Critical\u0027;\n  if (value \u003e= thresholds.urgent) return \u0027Urgent\u0027;\n  if (value \u003e= thresholds.headsUp) return \u0027Heads-up\u0027;\n  return null;\n}\n\nfunction severityFromLow(value, thresholds) {\n  if (value \u003c= thresholds.critical) return \u0027Critical\u0027;\n  if (value \u003c= thresholds.urgent) return \u0027Urgent\u0027;\n  if (value \u003c= thresholds.headsUp) return \u0027Heads-up\u0027;\n  return null;\n}\n\nfunction severityRank(severity) {\n  return { \u0027Heads-up\u0027: 1, Urgent: 2, Critical: 3 }[severity] ?? 0;\n}\n\nfunction toNumber(value, fallback = 0) {\n  const number = Number(value);\n  return Number.isFinite(number) ? number : fallback;\n}\n\nfunction rollingMax(values, times, unit) {\n  let best = { value: 0, startTime: null, endTime: null };\n\n  for (let startIndex = 0; startIndex \u003c values.length; startIndex += 1) {\n    const startMs = new Date(times[startIndex]).getTime();\n    let total = 0;\n    let endTime = times[startIndex];\n\n    for (let index = startIndex; index \u003c values.length; index += 1) {\n      const currentMs = new Date(times[index]).getTime();\n      if (currentMs - startMs \u003e= ROLLING_WINDOW_HOURS * 60 * 60 * 1000) break;\n      total += toNumber(values[index]);\n      endTime = times[index];\n    }\n\n    if (total \u003e best.value) {\n      best = {\n        value: Number(total.toFixed(unit === \u0027cm\u0027 ? 1 : 0)),\n        startTime: times[startIndex],\n        endTime,\n      };\n    }\n  }\n\n  return best;\n}\n\nfunction peakMax(values, times) {\n  return values.reduce(\n    (best, value, index) =\u003e {\n      const number = toNumber(value, -Infinity);\n      return number \u003e best.value ? { value: number, time: times[index] } : best;\n    },\n    { value: -Infinity, time: null },\n  );\n}\n\nfunction peakMin(values, times) {\n  return values.reduce(\n    (best, value, index) =\u003e {\n      const number = toNumber(value, Infinity);\n      return number \u003c best.value ? { value: number, time: times[index] } : best;\n    },\n    { value: Infinity, time: null },\n  );\n}\n\nfunction compactTimeRange(startTime, endTime) {\n  if (!startTime) return \u0027next 48 hours\u0027;\n  if (!endTime || startTime === endTime) return startTime;\n  return `${startTime} to ${endTime}`;\n}\n\nconst output = [];\nlet cityConfigs = [];\n\ntry {\n  cityConfigs = $(\u0027Build Open-Meteo Requests\u0027).all().map((item) =\u003e item.json);\n} catch (error) {\n  cityConfigs = [];\n}\n\nfor (const [itemIndex, item] of $input.all().entries()) {\n  const currentJson = item.json;\n  const cityConfig = currentJson.thresholds ? currentJson : cityConfigs[itemIndex];\n  const data = {\n    ...cityConfig,\n    ...currentJson,\n  };\n  const forecast = currentJson.forecast ?? currentJson.body ?? currentJson.data ?? currentJson;\n  const hourly = forecast.hourly ?? {};\n  const times = hourly.time ?? [];\n\n  if (!data.city || !data.thresholds) {\n    throw new Error(\n      \u0027Missing city metadata. Check that the previous Code node is named \"Build Open-Meteo Requests\" and that the HTTP Request node receives one item per city.\u0027,\n    );\n  }\n\n  const selectedIndexes = times\n    .map((time, index) =\u003e ({ time, index, ms: new Date(time).getTime() }))\n    .filter(({ ms }) =\u003e ms \u003e= nowMs \u0026\u0026 ms \u003c= horizonEndMs)\n    .map(({ index }) =\u003e index);\n\n  if (!selectedIndexes.length) continue;\n\n  const selectedTimes = selectedIndexes.map((index) =\u003e times[index]);\n  const pick = (field) =\u003e selectedIndexes.map((index) =\u003e hourly[field]?.[index] ?? 0);\n\n  const rawRainValues = pick(\u0027rain\u0027);\n  const precipitationValues = pick(\u0027precipitation\u0027);\n  const rainValues = rawRainValues.map((value, index) =\u003e {\n    return hourly.rain ? value : precipitationValues[index];\n  });\n  const snowValues = pick(\u0027snowfall\u0027);\n  const windSpeedValues = pick(\u0027wind_speed_10m\u0027);\n  const windValues = pick(\u0027wind_gusts_10m\u0027).map((value, index) =\u003e {\n    const windSpeed = windSpeedValues[index];\n    return Math.max(toNumber(value), toNumber(windSpeed));\n  });\n  const temperatureValues = pick(\u0027temperature_2m\u0027);\n\n  const alerts = [];\n  const rain = rollingMax(rainValues, selectedTimes, \u0027mm\u0027);\n  const snow = rollingMax(snowValues, selectedTimes, \u0027cm\u0027);\n  const wind = peakMax(windValues, selectedTimes);\n  const heat = peakMax(temperatureValues, selectedTimes);\n  const cold = peakMin(temperatureValues, selectedTimes);\n\n  const rainSeverity = severityFromHigh(rain.value, data.thresholds.rain24hMm);\n  if (rainSeverity) {\n    alerts.push({\n      condition: \u0027Rain\u0027,\n      severity: rainSeverity,\n      value: `${rain.value} mm in 24h`,\n      window: compactTimeRange(rain.startTime, rain.endTime),\n      operationalRisk: \u0027Possible delays from heavy rain, wet roads and reduced visibility.\u0027,\n    });\n  }\n\n  const snowSeverity = severityFromHigh(snow.value, data.thresholds.snow24hCm);\n  if (snowSeverity) {\n    alerts.push({\n      condition: \u0027Snow\u0027,\n      severity: snowSeverity,\n      value: `${snow.value} cm in 24h`,\n      window: compactTimeRange(snow.startTime, snow.endTime),\n      operationalRisk: \u0027Possible road disruption and slower movement across the city.\u0027,\n    });\n  }\n\n  const windSeverity = severityFromHigh(wind.value, data.thresholds.windGustKmh);\n  if (windSeverity) {\n    alerts.push({\n      condition: \u0027Wind\u0027,\n      severity: windSeverity,\n      value: `${Math.round(wind.value)} km/h gusts`,\n      window: wind.time,\n      operationalRisk: \u0027Possible disruption for outdoor work, couriers and exposed routes.\u0027,\n    });\n  }\n\n  const heatSeverity = severityFromHigh(heat.value, data.thresholds.heatC);\n  if (heatSeverity) {\n    alerts.push({\n      condition: \u0027Heat\u0027,\n      severity: heatSeverity,\n      value: `${Math.round(heat.value)} C`,\n      window: heat.time,\n      operationalRisk: \u0027Possible heat stress risk for teams working outside.\u0027,\n    });\n  }\n\n  const coldSeverity = severityFromLow(cold.value, data.thresholds.coldC);\n  if (coldSeverity) {\n    alerts.push({\n      condition: \u0027Cold\u0027,\n      severity: coldSeverity,\n      value: `${Math.round(cold.value)} C`,\n      window: cold.time,\n      operationalRisk: \u0027Possible icy conditions and comfort risk for outdoor teams.\u0027,\n    });\n  }\n\n  const newAlerts = alerts.filter((alert) =\u003e {\n    const eventDate = String(alert.window).slice(0, 10);\n    const dedupeKey = `${data.city}:${alert.condition}:${alert.severity}:${eventDate}`;\n    const previous = staticData.weatherAlertHistory[dedupeKey];\n\n    if (previous \u0026\u0026 nowMs - previous.sentAt \u003c dedupeMs) {\n      return false;\n    }\n\n    staticData.weatherAlertHistory[dedupeKey] = {\n      sentAt: nowMs,\n      value: alert.value,\n    };\n    return true;\n  });\n\n  if (!newAlerts.length) continue;\n\n  const highestSeverity = newAlerts\n    .map((alert) =\u003e alert.severity)\n    .sort((a, b) =\u003e severityRank(b) - severityRank(a))[0];\n\n  output.push({\n    json: {\n      city: data.city,\n      country: data.country,\n      generatedAt: now.toISOString(),\n      forecastWindow: `next ${HORIZON_HOURS} hours`,\n      highestSeverity,\n      alerts: newAlerts,\n      llmInput: JSON.stringify(\n        {\n          audience: \u0027non-technical Operations Manager\u0027,\n          city: data.city,\n          country: data.country,\n          generatedAt: now.toISOString(),\n          forecastWindow: `next ${HORIZON_HOURS} hours`,\n          highestSeverity,\n          alerts: newAlerts,\n        },\n        null,\n        2,\n      ),\n      slackFallback: `Weather alert for ${data.city}: ${highestSeverity}. ${newAlerts\n        .map((alert) =\u003e `${alert.condition} ${alert.value}`)\n        .join(\u0027; \u0027)}`,\n    },\n  });\n}\n\nreturn output;\n"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       16,
+                                       32
+                                   ],
+                      "id":  "631c87fa-8843-43c5-9955-5b9677da7b07",
+                      "name":  "Evaluate Alerts and Dedupe"
+                  },
+                  {
+                      "parameters":  {
+                                         "modelId":  {
+                                                         "__rl":  true,
+                                                         "mode":  "list",
+                                                         "value":  "models/gemini-3-flash-preview"
+                                                     },
+                                         "messages":  {
+                                                          "values":  [
+                                                                         {
+                                                                             "content":  "You write short operational Slack alerts for a non-technical Operations Manager.\n\nThe alert must be clear, calm and actionable. Do not mention APIs, JSON, thresholds, models, nodes, code or internal workflow details. Do not add facts that are not present in the input."
+                                                                         },
+                                                                         {
+                                                                             "content":  "Create one Slack message from this weather alert input:\n\n```json\n{{$json.llmInput}}\n```\n\nFormatting rules:\n\n- Start with one clear headline containing the city and severity.\n- Mention the forecast window.\n- Summarize the weather risk in plain English.\n- Include 2-3 practical actions for Operations.\n- Keep it under 120 words.\n- Use Slack-friendly formatting with short lines.\n- Output only the Slack message text.\n- Do not start the message with an equals sign.\n"
+                                                                         }
+                                                                     ]
+                                                      },
+                                         "builtInTools":  {
+
+                                                          },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "@n8n/n8n-nodes-langchain.googleGemini",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       176,
+                                       -144
+                                   ],
+                      "id":  "234680a4-9fba-4e97-983b-bd4ec040c9a8",
+                      "name":  "AI LLM Gemini",
+                      "credentials":  {
+                                          "googlePalmApi":  {
+                                                                "id":  "KILFCOOqzHaLrMUi",
+                                                                "name":  "Google Gemini(PaLM) Api account"
+                                                            }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "YOUR_SLACK_WEBHOOK_URL",
+                                         "sendBody":  true,
+                                         "bodyParameters":  {
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "name":  "text",
+                                                                                       "value":  "={{($json[\"content\"][\"parts\"][0][\"text\"] || \"\").replace(/^\\s*=+\\s*/, \"\").trimStart()}}"
+                                                                                   }
+                                                                               ]
+                                                            },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.4,
+                      "position":  [
+                                       464,
+                                       32
+                                   ],
+                      "id":  "e4586833-c9ac-4e5d-b850-709675b3e76b",
+                      "name":  "Post to Slack"
+                  }
+              ],
+    "pinData":  {
+
+                },
+    "connections":  {
+                        "Schedule Trigger":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Build Open-Meteo Requests",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Build Open-Meteo Requests":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Get Open-Meteo Forecast",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Get Open-Meteo Forecast":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Evaluate Alerts and Dedupe",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Evaluate Alerts and Dedupe":  {
+                                                           "main":  [
+                                                                        [
+                                                                            {
+                                                                                "node":  "AI LLM Gemini",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                                    ]
+                                                       },
+                        "AI LLM Gemini":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Post to Slack",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          }
+                    },
+    "active":  false,
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "binaryMode":  "separate"
+                 },
+    "versionId":  "c746237e-0cee-4bde-a241-52e58868a886",
+    "meta":  {
+                 "templateCredsSetupCompleted":  true,
+                 "instanceId":  "11b98ac34be72669d50fda8b5117942f90ee11c03793757a69951ec5436c6b8f"
+             },
+    "id":  "HzNwhpmhfXvY02K6",
+    "tags":  [
+
+             ]
+}

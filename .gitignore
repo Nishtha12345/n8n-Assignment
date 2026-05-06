@@ -1,0 +1,14 @@
+# Local/editor noise
+~$*.docx
+~WRL*.tmp
+*.tmp
+
+# Secrets and local runtime state
+.env
+.env.*
+node_modules/
+.n8n/
+
+# Do not commit the original local n8n export if it contains a real Slack webhook.
+Bolt-Weather Risk Alerts - Open-Meteo to Slack.json
+
