@@ -34,6 +34,28 @@ It checks the next 48 hours of hourly forecast data and alerts only when one or 
 6. Gemini LLM node converts structured alert data into a clear Slack message.
 7. HTTP Request node posts the message to Slack using an Incoming Webhook.
 
+```mermaid
+flowchart TD
+    A[Schedule Trigger<br/>Runs every 3 hours] --> B[Code Node 1<br/>Build Open-Meteo Requests]
+    B --> B1[Define 4 cities<br/>Tallinn, Madrid, Warsaw, Lagos]
+    B --> B2[Attach city-specific thresholds<br/>Rain, snow, wind, heat, cold]
+    B --> B3[Create Open-Meteo API URL<br/>One request per city]
+    B3 --> C[HTTP Request<br/>Get Open-Meteo Forecast]
+    C --> D[Code Node 2<br/>Evaluate Alerts and Dedupe]
+    D --> D1[Filter forecast<br/>Next 48 hours]
+    D --> D2[Calculate weather risk metrics<br/>24h rain/snow totals<br/>Peak wind, heat, cold]
+    D --> D3[Compare with thresholds<br/>Heads-up, Urgent, Critical]
+    D --> D4{Any alert?}
+    D4 -- No --> E[Stop<br/>No Slack noise]
+    D4 -- Yes --> F[Deduplicate alert<br/>City + condition + severity + date]
+    F --> G{Duplicate in last 24h?}
+    G -- Yes --> E
+    G -- No --> H[Create structured llmInput JSON]
+    H --> I[Gemini LLM<br/>Generate clear Ops message]
+    I --> J[Slack Incoming Webhook<br/>Post alert to channel]
+    J --> K[Operations Manager reads alert<br/>Under 30 seconds]
+```
+
 ## Quick Review / Import Steps
 
 1. Import `workflows/Bolt-Weather Risk Alerts - Open-Meteo to Slack.json` into n8n.
@@ -221,6 +243,34 @@ const staticData = $getWorkflowStaticData('global');
 Each alert is keyed by city, condition, severity and event date. If the same alert appears again within 24 hours, it is suppressed. If severity changes, a new alert is allowed.
 
 This keeps the workflow simple while avoiding repeated Slack messages every 3 hours for the same forecast event.
+
+## Code Node Logic
+
+The core decision logic lives in the second Code node.
+
+```mermaid
+flowchart TD
+    A[Open-Meteo hourly forecast] --> B[Select forecast hours<br/>now to next 48 hours]
+    B --> C[Rain and snow]
+    B --> D[Wind]
+    B --> E[Temperature]
+    C --> C1[Calculate max rolling<br/>24-hour total]
+    D --> D1[Find peak gust/speed]
+    E --> E1[Find max temperature<br/>and min temperature]
+    C1 --> F[Compare to city thresholds]
+    D1 --> F
+    E1 --> F
+    F --> G{Threshold crossed?}
+    G -- No --> H[No alert item]
+    G -- Yes --> I[Create alert object]
+    I --> J[Assign severity<br/>Heads-up / Urgent / Critical]
+    J --> K[Check dedupe history]
+    K --> L{Already sent?}
+    L -- Yes --> H
+    L -- No --> M[Output alert + llmInput]
+```
+
+The rules decide whether an alert should exist. Gemini does not decide severity; it only converts the structured alert into a clear Slack message for Operations.
 
 ## Testing Tips
 
